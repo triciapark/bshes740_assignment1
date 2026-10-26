@@ -1,0 +1,225 @@
+---
+title: "assignment1"
+output: html_document
+---
+
+# Setup (install packages, load data, preprocess)
+```{r}
+# install packages
+library(tm)
+library(wordcloud)
+library(ggplot2)
+library(RColorBrewer)
+
+# load data
+data1 <- read.csv("data/TADA_A1_set1.csv")
+data2 <- read.csv("data/TADA_A1_set2.csv")
+```
+
+# 1: What are the date ranges for the two sets? What information is provided in the CSV files? What are the languages in which tweets have been posted? 
+```{r}
+# date ranges
+data1$date <- as.Date(data1$date)
+data2$date <- as.Date(data2$date)
+cat("Dataset 1 date range: ", as.character(min(data1$date, na.rm=TRUE)), " to ", as.character(max(data1$date, na.rm=TRUE)))
+cat("\nDataset 2 date range: ", as.character(min(data2$date, na.rm=TRUE)), " to ", as.character(max(data2$date, na.rm=TRUE)))
+
+# info provided
+cat("\n\nColumns: ")
+cat(colnames(data1))
+
+# languages
+lang_counts <- as.data.frame(table(c(data1$lang, data2$lang)))
+cat("\n\nTweet languages:")
+sort(table(c(data1$lang, data2$lang)), decreasing = TRUE)
+```
+
+# 2: What is the total number of posts in set 1? What is the total in set 2? 
+```{r}
+cat("Number of posts in dataset 1: ", length(data1$id))
+cat("\nNumber of posts in dataset 2: ", length(data2$id))
+```
+
+# preprocess texts
+```{r}
+data1_en <- data1[data1$lang == "en", ]
+data2_en <- data2[data2$lang == "en", ]
+length(data1_en$id)
+length(data2_en$id)
+
+corpus1 <- Corpus(VectorSource(data1_en$text))
+corpus1 <- tm_map(corpus1, content_transformer(tolower))
+corpus1 <- tm_map(corpus1, removePunctuation)
+corpus1 <- tm_map(corpus1, removeNumbers)
+corpus1 <- tm_map(corpus1, function(x) removeWords(x, stopwords("en")))
+corpus1_text <- sapply(corpus1, as.character)
+
+corpus2 <- Corpus(VectorSource(data2_en$text))
+corpus2 <- tm_map(corpus2, content_transformer(tolower))
+corpus2 <- tm_map(corpus2, removePunctuation)
+corpus2 <- tm_map(corpus2, removeNumbers)
+corpus2 <- tm_map(corpus2, function(x) removeWords(x, stopwords("en")))
+corpus2_text <- sapply(corpus2, as.character)
+```
+
+# 3: How many tweets are there for methadone, Suboxone, and fentanyl in total? Tip: sometimes alternative expressions are used for substances (eg., fent for fentanyl)
+```{r}
+methadone_regex <- "(methadone)|(dolophine)|(methadose)|(diskets)"
+suboxone_regex <- "(suboxone)|(buprenorphine[- /]naloxone)"
+fentanyl_regex <- "fent"
+
+methadone1 <- Corpus(VectorSource(corpus1_text[grepl(methadone_regex, corpus1_text)]))
+methadone2 <- Corpus(VectorSource(corpus2_text[grepl(methadone_regex, corpus2_text)]))
+suboxone1 <- Corpus(VectorSource(corpus1_text[grepl(suboxone_regex, corpus1_text)]))
+suboxone2 <- Corpus(VectorSource(corpus2_text[grepl(suboxone_regex, corpus2_text)]))
+fentanyl1 <- Corpus(VectorSource(corpus1_text[grepl(fentanyl_regex, corpus1_text)]))
+fentanyl2 <- Corpus(VectorSource(corpus2_text[grepl(fentanyl_regex, corpus2_text)]))
+
+cat("Methadone posts in set 1: ", length(methadone1))
+cat("\nMethadone posts in set 2: ", length(methadone2))
+cat("\nSuboxone posts in set 1: ", length(suboxone1))
+cat("\nSuboxone posts in set 2: ", length(suboxone2))
+cat("\nFentanyl posts in set 1: ", length(fentanyl1))
+cat("\nFentanyl posts in set 2: ", length(fentanyl2))
+```
+
+# 4: Are there fentanyl analogs that are also being discussed (eg., carfentanil)?
+```{r}
+cat("Number of tweets:\n")
+analog_list <- list("carfentanil", "acetylfentanyl", "furanylfentanyl", "butyrylfentanyl", "acrylfentanyl", "methylfentanyl")
+for (analog in analog_list) {
+  count <- sum(grepl(analog, sapply(corpus1, as.character))) + sum(grepl(analog, sapply(corpus2, as.character)))
+  cat(" ", analog, count, "\n")
+}
+```
+
+# 5: What are some of the topics that are most closely associated with each of the three substances? The top 5-10 topics (if relevant) are acceptable.
+```{r}
+# stem
+corpus1 <- tm_map(corpus1, stemDocument)
+corpus2 <- tm_map(corpus2, stemDocument)
+
+# create document term matrices
+dtm1 <- DocumentTermMatrix(corpus1)
+dtm2 <- DocumentTermMatrix(corpus2)
+
+print("Methadone topics in set 1:")
+print(head(sort(unlist(findAssocs(dtm1, "methadon", 0)), decreasing = TRUE), 10))
+print("Methadone topics in set 2:")
+print(head(sort(unlist(findAssocs(dtm2, "methadon", 0)), decreasing = TRUE), 10))
+
+print("Suboxone topics in set 1:")
+print(head(sort(unlist(findAssocs(dtm1, "suboxon", 0)), decreasing = TRUE), 10))
+print("Suboxone topics in set 2:")
+print(head(sort(unlist(findAssocs(dtm2, "suboxon", 0)), decreasing = TRUE), 10))
+
+print("Fentanyl topics in set 1:")
+print(head(sort(unlist(findAssocs(dtm1, "fentanyl", 0)), decreasing = TRUE), 10))
+print("Fentanyl topics in set 2:")
+print(head(sort(unlist(findAssocs(dtm2, "fentanyl", 0)), decreasing = TRUE), 10))
+
+```
+
+# 6: Generate word clouds for each set, so that they can be shown to the researcher. 
+```{r}
+# all posts
+wordcloud(corpus1, min.freq=10, max.words=100, scale=c(3,.5), random.order=FALSE, colors = brewer.pal(8, "Accent"))
+wordcloud(corpus2, min.freq=10, max.words=100, scale=c(3,.5), random.order=FALSE, colors = brewer.pal(8, "Accent"))
+
+# methadone posts
+wordcloud(methadone1, min.freq=10, max.words=100, scale=c(3,.5), random.order=FALSE, colors = brewer.pal(8, "Accent"))
+wordcloud(methadone2, min.freq=10, max.words=100, scale=c(3,.5), random.order=FALSE, colors = brewer.pal(8, "Accent"))
+
+# suboxone posts
+wordcloud(suboxone1, min.freq=10, max.words=100, scale=c(3,.5), random.order=FALSE, colors = brewer.pal(8, "Accent"))
+wordcloud(suboxone2, min.freq=10, max.words=100, scale=c(3,.5), random.order=FALSE, colors = brewer.pal(8, "Accent"))
+
+# fentanyl posts
+wordcloud(fentanyl1, min.freq=10, max.words=100, scale=c(3,.5), random.order=FALSE, colors = brewer.pal(8, "Accent"))
+wordcloud(fentanyl2, min.freq=10, max.words=100, scale=c(3,.5), random.order=FALSE, colors = brewer.pal(8, "Accent"))
+```
+
+# 7: Generate appropriate figures to compare how the frequencies of mentions of these substances differ.
+```{r}
+all_dates <- c(data1_en$date, data2_en$date)
+all_text <- tolower(as.character(c(data1_en$text, data2_en$text)))
+
+week <- c(
+  as.Date("2019-11-01") + 7 * floor(as.numeric(data1_en$date - as.Date("2019-11-01")) / 7),
+  as.Date("2020-02-01") + 7 * floor(as.numeric(data2_en$date - as.Date("2020-02-01")) / 7)
+)
+
+mentions <- data.frame(week = week, Methadone = grepl(methadone_regex, all_text),
+  Suboxone = grepl(suboxone_regex, all_text), Fentanyl = grepl(fentanyl_regex, all_text))
+
+weekly_counts <- aggregate(. ~ week, data = mentions, FUN = sum)
+weekly_counts <- weekly_counts[order(weekly_counts$week), ]
+
+plot_data <- data.frame(
+  week = rep(weekly_counts$week, 3),
+  substance = rep(c("Methadone", "Suboxone", "Fentanyl"), each = nrow(weekly_counts)),
+  posts = c(weekly_counts$Methadone, weekly_counts$Suboxone, weekly_counts$Fentanyl)
+)
+
+ggplot(plot_data, aes(x = week, y = posts, color = substance)) +
+  scale_y_log10() +
+  geom_line(linewidth = 1) +
+  geom_point(size = 1.5) +
+  geom_vline(xintercept = as.Date("2020-02-01"), linetype = "dashed") +
+  labs(title = "Substance Mentions Over Time", x = "Date", y = "Posts per Week (log scale)", color = "Substance") +
+  scale_x_date(date_breaks = "2 weeks", date_labels = "%b %d") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+        legend.position = "top")
+
+counts <- rbind(
+  data.frame(Dataset = "Dataset 1", Substance = c("Methadone", "Suboxone", "Fentanyl"),
+             Posts = c(length(methadone1), length(suboxone1), length(fentanyl1))),
+  data.frame(Dataset = "Dataset 2", Substance = c("Methadone", "Suboxone", "Fentanyl"),
+             Posts = c(length(methadone2), length(suboxone2), length(fentanyl2))))
+
+ggplot(counts, aes(x = Substance, y = Posts, fill = Dataset)) +
+  geom_col(position = "dodge") +
+  scale_y_log10() +
+  labs(title = "Substance Mentions by Dataset", x = "Substance", y = "Number of Posts (log scale)") +
+  theme_minimal()
+```
+
+# 8: Find the top 10 most frequent bigrams in each of the three sets. Plot a bar chart for these.
+```{r}
+BigramTokenizer <- function(x) {
+  unlist(lapply(ngrams(words(x), 2), paste, collapse = " "), use.names = FALSE)
+}
+get_top10_bigrams <- function(corpus) {
+  bigram_counts <- table(unlist(lapply(corpus, function(x) BigramTokenizer(as.character(x)))))
+  head(sort(bigram_counts, decreasing = TRUE), 10)
+}
+corpora <- list(methadone1 = methadone1, methadone2 = methadone2, suboxone1 = suboxone1,
+                suboxone2 = suboxone2, fentanyl1 = fentanyl1, fentanyl2 = fentanyl2)
+for (name in names(corpora)) {
+  bigram10 <- get_top10_bigrams(corpora[[name]])
+  cat("Top 10 bigrams for", name, ":\n")
+  for (i in seq_along(bigram10)) {
+    cat("  ", names(bigram10)[i], ":", bigram10[i], "\n")
+  }
+}
+
+# plot
+for (name in names(corpora)) {
+  bigram10 <- get_top10_bigrams(corpora[[name]])
+  plot_data <- data.frame(
+    bigram = names(bigram10),
+    frequency = as.numeric(bigram10)
+  )
+  plot_data$bigram <- factor(plot_data$bigram, levels = plot_data$bigram[order(plot_data$frequency)])
+  print(
+    ggplot(plot_data, aes(x = bigram, y = frequency)) 
+    + geom_col(fill = "cornflowerblue") 
+    + coord_flip() 
+    + labs(title = paste("Top 10 Bigrams:", name), x = "Bigram", y = "Frequency") 
+    # + theme_minimal()
+    + theme(plot.title = element_text(size = 18, face = "bold"), 
+            axis.title = element_text(size = 16), axis.text = element_text(size = 14))
+  )
+}
+```
